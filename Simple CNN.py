@@ -19,68 +19,35 @@ import json
 # finetune.
 ################################################################################
 
-'''
-lass CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv1 = nn.Sequential(         
-            nn.Conv2d(
-                in_channels=1,  # since the images are grayscale, the number of input channels is 1            
-                out_channels=3,            
-                kernel_size=5,              
-                stride=1,                   
-                padding=2,                  
-            ),                              
-            nn.ReLU(),                      
-            nn.MaxPool2d(kernel_size=2),    
-        )
-        self.conv2 = nn.Sequential(         
-            nn.Conv2d(3, 6, 5, 1, 2),     
-            nn.ReLU(),                      
-            nn.MaxPool2d(2),                
-        )
-        # fully connected layer, output 10 classes
-        self.out = nn.Linear(6 * 7 * 7, 10)
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        # flatten the output of conv2 to (batch_size, 32 * 7 * 7)
-        x = x.view(x.size(0), -1)       
-        output = self.out(x)
-        return output
-
-cnn_model = CNN()
-summary(cnn_model, (1, 28, 28))'''
 
 class SimpleCNN(nn.Module):
     def __init__(self):
         super(SimpleCNN, self).__init__()
-        # TODO - define the layers of the network you will use
-        self.conv1 = nn.Sequential(         
-            nn.Conv2d(
-                in_channels=1,  # since the images are grayscale, the number of input channels is 1            
-                out_channels=3,            
-                kernel_size=5,              
-                stride=1,                   
-                padding=2,                  
-            ),                              
-            nn.ReLU(),                      
-            nn.MaxPool2d(kernel_size=2),    
-        )
-        self.conv2 = nn.Sequential(         
-            nn.Conv2d(3, 6, 5, 1, 2),     
-            nn.ReLU(),                      
-            nn.MaxPool2d(2),                
-        )
-        # fully connected layer, output 10 classes
-        self.out = nn.Linear(6 * 7 * 7, 10)
-    
+         # Convolutional Layer 1 (3x32x32 -> 16x32x32)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(16)  # Batch normalization
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)  # Reduces spatial size by 2x
+
+        # Convolutional Layer 2 (16x16x16 -> 32x16x16)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(32)
+
+        # Convolutional Layer 3 (32x16x16 -> 64x8x8)
+        self.conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+
+        # Fully Connected Layers
+        self.fc1 = nn.Linear(64 * 4 * 4, 256)  # Corrected input size
+        self.fc2 = nn.Linear(256, 100)  # CIFAR-100 has 100 classes
+
     def forward(self, x):
-        # TODO - define the forward pass of the network you will use
-        x = self.conv1(x)
-        x = self.conv2(x)
-        # flatten the output of conv2 to (batch_size, 32 * 7 * 7)
-        x = x.view(x.size(0), -1)       
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        x = self.pool(F.relu(self.bn2(self.conv2(x))))
+        x = self.pool(F.relu(self.bn3(self.conv3(x))))  
+
+        x = x.view(x.size(0), -1)  # Flatten
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
         return x
 
 ################################################################################
@@ -102,12 +69,18 @@ def train(epoch, model, trainloader, optimizer, criterion, CONFIG):
 
         # move inputs and labels to the target device
         inputs, labels = inputs.to(device), labels.to(device)
-
+        
         ### TODO - Your code here
-        ...
+        optimizer.zero_grad()  # Zero the gradients
 
-        running_loss += ...   ### TODO
-        _, predicted = ...    ### TODO
+        outputs = model(inputs)  # Forward pass
+        loss = criterion(outputs, labels)  # Compute loss
+        
+        loss.backward()  # Backward pass
+        optimizer.step()  # Update parameters
+
+        running_loss += loss.item()  # Accumulate loss
+        _, predicted = torch.max(outputs, 1)
 
         total += labels.size(0)
         correct += predicted.eq(labels).sum().item()
@@ -140,11 +113,11 @@ def validate(model, valloader, criterion, device):
             # move inputs and labels to the target device
             inputs, labels = inputs.to(device), labels.to(device)
 
-            outputs = ... ### TODO -- inference
-            loss = ...    ### TODO -- loss calculation
+            outputs = model(inputs) ### TODO -- inference
+            loss = criterion(outputs, labels)    ### TODO -- loss calculation
 
-            running_loss += ...  ### SOLUTION -- add loss from this sample
-            _, predicted = ...   ### SOLUTION -- predict the class
+            running_loss += loss.item()   ### SOLUTION -- add loss from this sample
+            _, predicted = torch.max(outputs, 1)   ### SOLUTION -- predict the class
 
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
@@ -157,7 +130,6 @@ def validate(model, valloader, criterion, device):
 
 
 def main():
-
     ############################################################################
     #    Configuration Dictionary (Modify as needed)
     ############################################################################
@@ -165,10 +137,9 @@ def main():
     # one place to change the configuration.
     # It's also convenient to pass to our experiment tracking tool.
 
-
     CONFIG = {
-        "model": "MyModel",   # Change name when using a different model
-        "batch_size": 8, # run batch size finder to find optimal batch size
+        "model": "MyModel2",   # Change name when using a different model
+        "batch_size": 8, # run batch size finder to find optimal batch size (i don't think 8 is ever used...)
         "learning_rate": 0.1,
         "epochs": 5,  # Train for longer in a real scenario
         "num_workers": 4, # Adjust based on your system
@@ -187,9 +158,40 @@ def main():
     #      Data Transformation (Example - You might want to modify) 
     ############################################################################
 
+    # Temporarily define a transform without normalization
+    transform_temp = transforms.Compose([
+        transforms.ToTensor()
+    ])
+
+    # Load dataset without normalization
+    temp_trainset = torchvision.datasets.CIFAR100(root=CONFIG["data_dir"], train=True,
+                                                download=True, transform=transform_temp)
+    temp_loader = torch.utils.data.DataLoader(temp_trainset, batch_size=100, shuffle=False, num_workers=CONFIG["num_workers"])
+
+    # Calculate mean and std
+    def compute_mean_std(loader):
+        mean = 0.0
+        std = 0.0
+        total_images = 0
+
+        for images, _ in loader:
+            batch_samples = images.size(0)
+            images = images.view(batch_samples, images.size(1), -1)  # (B, C, H*W)
+            mean += images.mean(2).sum(0)
+            std += images.std(2).sum(0)
+            total_images += batch_samples
+
+        mean /= total_images
+        std /= total_images
+        return mean, std
+
+    mean, std = compute_mean_std(temp_loader)
+
+
+
     transform_train = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), # Example normalization
+        transforms.Normalize(mean.tolist(), std.tolist()),
     ])
 
     ###############
@@ -197,7 +199,15 @@ def main():
     ###############
 
     # Validation and test transforms (NO augmentation)
-    transform_test = ...   ### TODO -- BEGIN SOLUTION
+    transform_val = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean.tolist(), std.tolist()),
+])
+    
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean.tolist(), std.tolist()),
+    ]) 
 
     ############################################################################
     #       Data Loading
@@ -207,22 +217,25 @@ def main():
                                             download=True, transform=transform_train)
 
     # Split train into train and validation (80/20 split)
-    train_size = ...   ### TODO -- Calculate training set size
-    val_size = ...     ### TODO -- Calculate validation set size
-    trainset, valset = ...  ### TODO -- split into training and validation sets
+    train_size = int(0.8 * len(trainset))   ### TODO -- Calculate training set size
+    val_size = len(trainset) - train_size     ### TODO -- Calculate validation set size
+    trainset, valset = torch.utils.data.random_split(trainset, [train_size, val_size])  ### TODO -- split into training and validation sets
+    valset.dataset.transform = transform_val
 
     ### TODO -- define loaders and test set
-    trainloader = ...
-    valloader = ...
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
+    valloader = torch.utils.data.DataLoader(valset, batch_size=64, shuffle=False)
 
     # ... (Create validation and test loaders)
-    testset = ...
-    testloader = ...
+    testset = torchvision.datasets.CIFAR100(root=CONFIG["data_dir"], train=False,
+                                            download=True, transform=transform_test)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False)
     
     ############################################################################
     #   Instantiate model and move to target device
     ############################################################################
-    model = ...   # instantiate your model ### TODO
+    model = SimpleCNN() # Instantiate your model   # instantiate your model ### TODO
+    
     model = model.to(CONFIG["device"])   # move it to target device
 
     print("\nModel summary:")
@@ -243,9 +256,9 @@ def main():
     ############################################################################
     # Loss Function, Optimizer and optional learning rate scheduler
     ############################################################################
-    criterion = ...   ### TODO -- define loss criterion
-    optimizer = ...   ### TODO -- define optimizer
-    scheduler = ...  # Add a scheduler   ### TODO -- you can optionally add a LR scheduler
+    criterion = nn.CrossEntropyLoss()  ### TODO -- define loss criterion
+    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)  # Add a scheduler   ### TODO -- you can optionally add a LR scheduler
 
 
     # Initialize wandb
@@ -300,3 +313,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
