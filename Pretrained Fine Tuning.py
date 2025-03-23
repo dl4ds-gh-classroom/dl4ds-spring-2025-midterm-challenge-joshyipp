@@ -10,6 +10,7 @@ import pandas as pd
 from tqdm.auto import tqdm  # For progress bars
 import wandb
 import json
+from torchvision.models import densenet121
 
 ################################################################################
 # Model Definition (Simple Example - You need to complete)
@@ -18,37 +19,15 @@ import json
 # for Part 3 you have the option of using a predefined, pretrained network to
 # finetune.
 ################################################################################
+from torchvision.models import resnet18
+import torchvision.models as models                                                                                                                   
+def get_model(config):
+    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)  # Use pretrained ResNet-18
+    # Replace the final classification layer for CIFAR-100 (100 classes)
+    model.fc = nn.Linear(model.fc.in_features, 100)
+    return model
 
 
-class SimpleCNN(nn.Module):
-    def __init__(self):
-        super(SimpleCNN, self).__init__()
-         # Convolutional Layer 1 (3x32x32 -> 16x32x32)
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, stride=1, padding=1)
-        self.bn1 = nn.BatchNorm2d(16)  # Batch normalization
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)  # Reduces spatial size by 2x
-
-        # Convolutional Layer 2 (16x16x16 -> 32x16x16)
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
-        self.bn2 = nn.BatchNorm2d(32)
-
-        # Convolutional Layer 3 (32x16x16 -> 64x8x8)
-        self.conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        self.bn3 = nn.BatchNorm2d(64)
-
-        # Fully Connected Layers
-        self.fc1 = nn.Linear(64 * 4 * 4, 256)  # Corrected input size
-        self.fc2 = nn.Linear(256, 100)  # CIFAR-100 has 100 classes
-
-    def forward(self, x):
-        x = self.pool(F.relu(self.bn1(self.conv1(x))))
-        x = self.pool(F.relu(self.bn2(self.conv2(x))))
-        x = self.pool(F.relu(self.bn3(self.conv3(x))))  
-
-        x = x.view(x.size(0), -1)  # Flatten
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
 
 ################################################################################
 # Define a one epoch training function
@@ -138,11 +117,11 @@ def main():
     # It's also convenient to pass to our experiment tracking tool.
 
     CONFIG = {
-        "model": "MyModel2",   # Change name when using a different model
-        "batch_size": 8, # run batch size finder to find optimal batch size (i don't think 8 is ever used...)
-        "learning_rate": 0.1,
+        "model": "resnet18-pretrained2",   # Change name when using a different model
+        "batch_size": 16, # run batch size finder to find optimal batch size (i don't think the default value 8 is ever used...)
+        "learning_rate": 1e-4,
         "epochs": 5,  # Train for longer in a real scenario
-        "num_workers": 4, # Adjust based on your system
+        "num_workers": 6, # Adjust based on your system
         "device": "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu",
         "data_dir": "./data",  # Make sure this directory exists
         "ood_dir": "./data/ood-test",
@@ -176,7 +155,7 @@ def main():
 
         for images, _ in loader:
             batch_samples = images.size(0)
-            images = images.view(batch_samples, images.size(1), -1)  # (B, C, H*W)
+            images = images.view(batch_samples, images.size(1), -1)  
             mean += images.mean(2).sum(0)
             std += images.std(2).sum(0)
             total_images += batch_samples
@@ -188,26 +167,28 @@ def main():
     mean, std = compute_mean_std(temp_loader)
 
 
-
+    #https://github.com/1Konny/gradcam_plus_plus-pytorch/issues/8 explained why we have to upsample to 224 with resnet 18
     transform_train = transforms.Compose([
+        #transforms.Resize(224),
+        ##transforms.RandomCrop(224, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(0.2, 0.2, 0.2, 0.1),
         transforms.ToTensor(),
         transforms.Normalize(mean.tolist(), std.tolist()),
     ])
 
-    ###############
-    # TODO Add validation and test transforms - NO augmentation for validation/test
-    ###############
 
-    # Validation and test transforms (NO augmentation)
     transform_val = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(mean.tolist(), std.tolist()),
-])
-    
-    transform_test = transforms.Compose([
+        #transforms.Resize(224),  # <--- Add this
         transforms.ToTensor(),
         transforms.Normalize(mean.tolist(), std.tolist()),
-    ]) 
+    ])
+
+    transform_test = transforms.Compose([
+        #transforms.Resize(224),  # <--- Add this
+        transforms.ToTensor(),
+        transforms.Normalize(mean.tolist(), std.tolist()),
+    ])
 
     ############################################################################
     #       Data Loading
@@ -220,6 +201,8 @@ def main():
     train_size = int(0.8 * len(trainset))   ### TODO -- Calculate training set size
     val_size = len(trainset) - train_size     ### TODO -- Calculate validation set size
     trainset, valset = torch.utils.data.random_split(trainset, [train_size, val_size])  ### TODO -- split into training and validation sets
+
+    trainset.dataset.transform = transform_train
     valset.dataset.transform = transform_val
 
     ### TODO -- define loaders and test set
@@ -234,13 +217,12 @@ def main():
     ############################################################################
     #   Instantiate model and move to target device
     ############################################################################
-    model = SimpleCNN() # Instantiate your model   # instantiate your model ### TODO
-    
+    model = get_model(CONFIG)
     model = model.to(CONFIG["device"])   # move it to target device
 
     print("\nModel summary:")
     print(f"{model}\n")
-
+    
     # The following code you can run once to find the batch size that gives you the fastest throughput.
     # You only have to do this once for each machine you use, then you can just
     # set it in CONFIG.
@@ -257,8 +239,9 @@ def main():
     # Loss Function, Optimizer and optional learning rate scheduler
     ############################################################################
     criterion = nn.CrossEntropyLoss()  ### TODO -- define loss criterion
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)  # Add a scheduler   ### TODO -- you can optionally add a LR scheduler
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=CONFIG["learning_rate"], weight_decay=1e-4) #only optimize trainable layers
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CONFIG["epochs"])
 
 
     # Initialize wandb

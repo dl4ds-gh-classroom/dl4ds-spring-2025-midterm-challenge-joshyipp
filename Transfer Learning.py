@@ -125,7 +125,7 @@ def main():
         "device": "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu",
         "data_dir": "./data",  # Make sure this directory exists
         "ood_dir": "./data/ood-test",
-        "wandb_project": "sp25-ds542-challenge",
+        "wandb_project": "sp25-ds542-challeng                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                e",
         "seed": 42,
     }
 
@@ -202,13 +202,13 @@ def main():
     valset.dataset.transform = transform_val
 
     ### TODO -- define loaders and test set
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
-    valloader = torch.utils.data.DataLoader(valset, batch_size=64, shuffle=False)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=CONFIG["batch_size"], shuffle=True)
+    valloader = torch.utils.data.DataLoader(valset, batch_size=CONFIG["batch_size"], shuffle=False)
 
     # ... (Create validation and test loaders)
     testset = torchvision.datasets.CIFAR100(root=CONFIG["data_dir"], train=False,
                                             download=True, transform=transform_test)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=CONFIG["batch_size"], shuffle=False)
     
     ############################################################################
     #   Instantiate model and move to target device
