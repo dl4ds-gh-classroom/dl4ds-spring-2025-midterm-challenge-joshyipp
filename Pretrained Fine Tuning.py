@@ -22,9 +22,15 @@ from torchvision.models import densenet121
 from torchvision.models import resnet18
 import torchvision.models as models                                                                                                                   
 def get_model(config):
-    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)  # Use pretrained ResNet-18
-    # Replace the final classification layer for CIFAR-100 (100 classes)
-    model.fc = nn.Linear(model.fc.in_features, 100)
+    model = densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+
+    # Patch first conv for small CIFAR-100 images
+    model.features.conv0 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    model.features.pool0 = nn.Identity()  # Remove aggressive downsampling
+
+    # Replace the classifier head
+    num_features = model.classifier.in_features
+    model.classifier = nn.Linear(num_features, 100)  # CIFAR-100 = 100 classes
     return model
 
 
@@ -117,10 +123,10 @@ def main():
     # It's also convenient to pass to our experiment tracking tool.
 
     CONFIG = {
-        "model": "resnet18-pretrained2",   # Change name when using a different model
-        "batch_size": 16, # run batch size finder to find optimal batch size (i don't think the default value 8 is ever used...)
+        "model": "densenet121-pretrained",   # Change name when using a different model
+        "batch_size": 64, # run batch size finder to find optimal batch size (i don't think the default value 8 is ever used...)
         "learning_rate": 1e-4,
-        "epochs": 5,  # Train for longer in a real scenario
+        "epochs": 30,  # Train for longer in a real scenario
         "num_workers": 6, # Adjust based on your system
         "device": "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu",
         "data_dir": "./data",  # Make sure this directory exists
@@ -168,13 +174,13 @@ def main():
 
 
     #https://github.com/1Konny/gradcam_plus_plus-pytorch/issues/8 explained why we have to upsample to 224 with resnet 18
+    from torchvision.transforms import RandAugment
     transform_train = transforms.Compose([
-        #transforms.Resize(224),
-        ##transforms.RandomCrop(224, padding=4),
+        transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(0.2, 0.2, 0.2, 0.1),
+        RandAugment(num_ops=2, magnitude=9),  # Simple plug-and-play stronger augmentation
         transforms.ToTensor(),
-        transforms.Normalize(mean.tolist(), std.tolist()),
+        transforms.Normalize(mean.tolist(), std.tolist())
     ])
 
 
@@ -238,10 +244,11 @@ def main():
     ############################################################################
     # Loss Function, Optimizer and optional learning rate scheduler
     ############################################################################
-    criterion = nn.CrossEntropyLoss()  ### TODO -- define loss criterion
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=CONFIG["learning_rate"], weight_decay=1e-4) #only optimize trainable layers
+    from torch.optim.lr_scheduler import OneCycleLR
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    scheduler = OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(trainloader), epochs=CONFIG["epochs"]) #lets try using warmup scheduling
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CONFIG["epochs"])
 
 
     # Initialize wandb
