@@ -15,8 +15,7 @@ import json
 # Model Definition (Simple Example - You need to complete)
 # For Part 1, you need to manually define a network.
 # For Part 2 you have the option of using a predefined network and
-# for Part 3 you have the option of using a predefined, pretrained network to
-# finetune.
+# for Part 3 you have the option of using a predefined, pretrained network to finetune.
 ################################################################################
 import torchvision.models as models                                                                                                            
 import timm
