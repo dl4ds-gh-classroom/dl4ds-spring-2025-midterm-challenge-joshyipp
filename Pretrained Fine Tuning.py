@@ -19,18 +19,23 @@ from torchvision.models import densenet121
 # for Part 3 you have the option of using a predefined, pretrained network to
 # finetune.
 ################################################################################
-from torchvision.models import resnet18
-import torchvision.models as models                                                                                                                   
-def get_model(config):
-    model = densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+import torchvision.models as models     
+from torchvision.models import resnext50_32x4d, ResNeXt50_32X4D_Weights                                                                                                              
 
+def get_model(config):
+    weights = ResNeXt50_32X4D_Weights.IMAGENET1K_V1
+    model = resnext50_32x4d(weights=weights)
+
+    # Patch the first conv layer for CIFAR-100 (32x32)
+    model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    model.maxpool = nn.Identity()  # Remove aggressive downsampling
     # Patch first conv for small CIFAR-100 images
-    model.features.conv0 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-    model.features.pool0 = nn.Identity()  # Remove aggressive downsampling
+    # model.features.conv0 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    # model.features.pool0 = nn.Identity()  # Remove aggressive downsampling
 
     # Replace the classifier head
-    num_features = model.classifier.in_features
-    model.classifier = nn.Linear(num_features, 100)  # CIFAR-100 = 100 classes
+    in_features = model.fc.in_features
+    model.fc = nn.Linear(in_features, 100)
     return model
 
 
@@ -126,7 +131,7 @@ def main():
         "model": "densenet121-pretrained",   # Change name when using a different model
         "batch_size": 64, # run batch size finder to find optimal batch size (i don't think the default value 8 is ever used...)
         "learning_rate": 1e-4,
-        "epochs": 30,  # Train for longer in a real scenario
+        "epochs": 50,  # Train for longer in a real scenario #10 was fine
         "num_workers": 6, # Adjust based on your system
         "device": "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu",
         "data_dir": "./data",  # Make sure this directory exists
@@ -174,14 +179,19 @@ def main():
 
 
     #https://github.com/1Konny/gradcam_plus_plus-pytorch/issues/8 explained why we have to upsample to 224 with resnet 18
-    from torchvision.transforms import RandAugment
+    from torchvision.transforms import RandAugment, ColorJitter, GaussianBlur, RandomErasing
+
     transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        RandAugment(num_ops=2, magnitude=9),  # Simple plug-and-play stronger augmentation
+        transforms.RandomCrop(32, padding=4),                       # Spatial jitter
+        transforms.RandomHorizontalFlip(),                         # Flip for invariance
+        ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),  # Color/light variation
+        transforms.RandomApply([GaussianBlur(kernel_size=3)], p=0.2),  # Occasional blur
+        RandAugment(num_ops=2, magnitude=9),                        # Strong augmentations
         transforms.ToTensor(),
-        transforms.Normalize(mean.tolist(), std.tolist())
+        transforms.Normalize(mean.tolist(), std.tolist()),         # Dynamic normalization
+        RandomErasing(p=0.25, scale=(0.02, 0.2), ratio=(0.3, 3.3))  # Simulate occlusion
     ])
+
 
 
     transform_val = transforms.Compose([
@@ -245,8 +255,8 @@ def main():
     # Loss Function, Optimizer and optional learning rate scheduler
     ############################################################################
     from torch.optim.lr_scheduler import OneCycleLR
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.8, weight_decay=5e-4)
     scheduler = OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(trainloader), epochs=CONFIG["epochs"]) #lets try using warmup scheduling
 
 
@@ -257,8 +267,11 @@ def main():
 
     ############################################################################
     # --- Training Loop (Example - Students need to complete) ---
-    ############################################################################
+    ##########################################a##################################
     best_val_acc = 0.0
+    early_stopping_patience = 5  # Stop if no improvement for N epochs
+    early_stopping_counter = 0
+    best_val_loss = float("inf")  # or use best_val_acc for accuracy-based stopping
 
     for epoch in range(CONFIG["epochs"]):
         train_loss, train_acc = train(epoch, model, trainloader, optimizer, criterion, CONFIG)
@@ -276,10 +289,18 @@ def main():
         })
 
         # Save the best model (based on validation accuracy)
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            early_stopping_counter = 0
+            # Save the best model
             torch.save(model.state_dict(), "best_model.pth")
-            wandb.save("best_model.pth") # Save to wandb as well
+            wandb.save("best_model.pth")
+        else:
+            early_stopping_counter += 1
+            print(f"EarlyStopping counter: {early_stopping_counter} / {early_stopping_patience}")
+            if early_stopping_counter >= early_stopping_patience:
+                print("Early stopping triggered.")
+                break
 
     wandb.finish()
 

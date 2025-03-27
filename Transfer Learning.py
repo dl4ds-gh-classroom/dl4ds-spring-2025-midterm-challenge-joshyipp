@@ -191,7 +191,6 @@ def main():
     ############################################################################
     #       Data Loading
     ############################################################################
-
     trainset = torchvision.datasets.CIFAR100(root='./data', train=True,
                                             download=True, transform=transform_train)
 
@@ -239,7 +238,6 @@ def main():
     criterion = nn.CrossEntropyLoss()  ### TODO -- define loss criterion
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)  # Add a scheduler   ### TODO -- you can optionally add a LR scheduler
-
 
     # Initialize wandb
     wandb.init(project="-sp25-ds542-challenge", config=CONFIG)

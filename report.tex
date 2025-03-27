@@ -1,0 +1,59 @@
+
+
+
+\section*{Analysis of Results}
+
+\subsection*{Baseline (Simple CNN + SGD)}
+\begin{itemize}
+    \item \textbf{Optimizer:} SGD, learning rate = 0.001
+    \item \textbf{CIFAR-100 Test Accuracy:} 27.96\%
+\end{itemize}
+
+\subsection*{Switched to Adam}
+\begin{itemize}
+    \item \textbf{Optimizer:} Adam, learning rate = 1e-3
+    \item \textbf{CIFAR-100 Test Accuracy:} 40.44\%
+    \item Adam provided faster generalization and higher test accuracy without tuning.
+\end{itemize}
+
+\subsection*{Used Dynamic Normalization}
+\begin{itemize}
+    \item Normalizing using per-channel dataset mean and standard deviation improved performance.
+    \item Stabilized training compared to generic normalization $(0.5, 0.5, 0.5)$.
+\end{itemize}
+
+\subsection*{Pretrained ResNet18 (No Fine-Tuning)}
+\begin{itemize}
+    \item \textbf{CIFAR-100 Test Accuracy:} 44.57\%
+    \item Even without training, pretrained models outperformed simple baselines.
+\end{itemize}
+
+\subsection*{Pretrained ResNet18 + Augmentation}
+\begin{itemize}
+    \item \textbf{Epochs:} 5
+    \item \textbf{Test Accuracy:} 55.32\%
+\end{itemize}
+
+\subsection*{DenseNet121 + Augmentation + Adam}
+\begin{itemize}
+    \item \textbf{Epochs:} 7
+    \item \textbf{Final Test Accuracy:} 76.00\%
+    \item DenseNet generalized better than ResNet in fewer epochs.
+\end{itemize}
+
+\subsection*{Ablation Study}
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Variant} & \textbf{Test Accuracy} \\
+\hline
+Simple CNN + SGD & 27.96\% \\
+Simple CNN + Adam & 40.44\% \\
+ResNet18 (pretrained, frozen) & 44.57\% \\
+ResNet18 + Aug + Dynamic Norm & 55.32\% \\
+DenseNet121 + Adam + 7 Epochs & \textbf{76.00\%} \\
+\hline
+\end{tabular}
+\caption{Ablation study of model architectures and techniques on CIFAR-100.}
+\end{table}

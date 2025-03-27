@@ -269,6 +269,7 @@ def main():
     # --- Training Loop (Example - Students need to complete) ---
     ############################################################################
     best_val_acc = 0.0
+    
 
     for epoch in range(CONFIG["epochs"]):
         train_loss, train_acc = train(epoch, model, trainloader, optimizer, criterion, CONFIG)
