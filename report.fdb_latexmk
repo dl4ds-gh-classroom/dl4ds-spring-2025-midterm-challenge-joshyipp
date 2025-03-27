@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1743106262.45994 "c:/Users/yip/Documents/GitHub/dl4ds-spring-2025-midterm-challenge-joshyipp/report.tex" "report.pdf" "report" 1743106262.99783 0
+["pdflatex"] 1743106313.81632 "c:/Users/yip/Documents/GitHub/dl4ds-spring-2025-midterm-challenge-joshyipp/report.tex" "report.pdf" "report" 1743106314.39509 0
   "C:/Users/yip/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1743106165 80909 eab91d9745dd2edfd62a31d53cd5fe15 ""
   "C:/Users/yip/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/tcrm1000.pk" 1738555455 11548 0bb996c1e9c91848b114029d804ea9ce ""
   "C:/Users/yip/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1739567806 12012425 d67d7c0b7d863ac94ef75401176b7c2d ""
@@ -76,10 +76,10 @@
   "C:/Users/yip/AppData/Local/Programs/MiKTeX/tex/latex/refcount/refcount.sty" 1576433952 9878 9e94e8fa600d95f9c7731bb21dfb67a4 ""
   "C:/Users/yip/AppData/Local/Programs/MiKTeX/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1657800696 9714 ba3194bd52c8499b3f1e3eb91d409670 ""
   "C:/Users/yip/AppData/Local/Programs/MiKTeX/tex/latex/url/url.sty" 1388490452 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
-  "c:/Users/yip/Documents/GitHub/dl4ds-spring-2025-midterm-challenge-joshyipp/report.tex" 1743106262 10409 6047e11b3f0f2a9bc7bc8102defad579 ""
-  "report.aux" 1743106262 358 69a1683d13a3704f6a3fccfb7e6bc31f "pdflatex"
-  "report.out" 1743106262 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
-  "report.tex" 1743106262 10409 6047e11b3f0f2a9bc7bc8102defad579 ""
+  "c:/Users/yip/Documents/GitHub/dl4ds-spring-2025-midterm-challenge-joshyipp/report.tex" 1743106313 10408 23a3671b2442d661bf237830f217c5a6 ""
+  "report.aux" 1743106314 358 69a1683d13a3704f6a3fccfb7e6bc31f "pdflatex"
+  "report.out" 1743106314 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
+  "report.tex" 1743106313 10408 23a3671b2442d661bf237830f217c5a6 ""
   (generated)
   "report.aux"
   "report.log"
