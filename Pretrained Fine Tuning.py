@@ -10,7 +10,6 @@ import pandas as pd
 from tqdm.auto import tqdm  # For progress bars
 import wandb
 import json
-from torchvision.models import densenet121
 
 ################################################################################
 # Model Definition (Simple Example - You need to complete)
@@ -19,32 +18,17 @@ from torchvision.models import densenet121
 # for Part 3 you have the option of using a predefined, pretrained network to
 # finetune.
 ################################################################################
-import torchvision.models as models     
-from torchvision.models import resnext50_32x4d, ResNeXt50_32X4D_Weights                                                                                                              
-
+import torchvision.models as models                                                                                                            
+import timm
 def get_model(config):
-    weights = ResNeXt50_32X4D_Weights.IMAGENET1K_V1
-    model = resnext50_32x4d(weights=weights)
-
-    # Patch the first conv layer for CIFAR-100 (32x32)
-    model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-    model.maxpool = nn.Identity()  # Remove aggressive downsampling
-    # Patch first conv for small CIFAR-100 images
-    # model.features.conv0 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-    # model.features.pool0 = nn.Identity()  # Remove aggressive downsampling
-
-    # Replace the classifier head
-    in_features = model.fc.in_features
-    model.fc = nn.Linear(in_features, 100)
+    model = timm.create_model(
+        'convnext_small.fb_in22k_ft_in1k',
+        pretrained=True,
+        num_classes=100
+    )
     return model
 
-
-
-################################################################################
-# Define a one epoch training function
-################################################################################
 def train(epoch, model, trainloader, optimizer, criterion, CONFIG):
-    """Train one epoch, e.g. all batches of one epoch."""
     device = CONFIG["device"]
     model.train()  # Set the model to training mode
     running_loss = 0.0
@@ -128,9 +112,9 @@ def main():
     # It's also convenient to pass to our experiment tracking tool.
 
     CONFIG = {
-        "model": "densenet121-pretrained",   # Change name when using a different model
-        "batch_size": 64, # run batch size finder to find optimal batch size (i don't think the default value 8 is ever used...)
-        "learning_rate": 1e-4,
+        "model": "efficientnet-pretrained",   # Change name when using a different model
+        "batch_size": 64, # run batch size finder to find optimal batch size (i don't think the default value is ever used...)
+        "learning_rate": 1e-6,
         "epochs": 50,  # Train for longer in a real scenario #10 was fine
         "num_workers": 6, # Adjust based on your system
         "device": "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu",
@@ -178,30 +162,29 @@ def main():
     mean, std = compute_mean_std(temp_loader)
 
 
-    #https://github.com/1Konny/gradcam_plus_plus-pytorch/issues/8 explained why we have to upsample to 224 with resnet 18
+    #https://github.com/1Konny/gradcam_plus_plus-pytorch/issues/8 explained why we have to upsample to 224 with resnet 18...
     from torchvision.transforms import RandAugment, ColorJitter, GaussianBlur, RandomErasing
 
     transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),                       # Spatial jitter
+        transforms.Resize(224),
+        transforms.RandomCrop(224, padding=16),
         transforms.RandomHorizontalFlip(),                         # Flip for invariance
         ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),  # Color/light variation
         transforms.RandomApply([GaussianBlur(kernel_size=3)], p=0.2),  # Occasional blur
         RandAugment(num_ops=2, magnitude=9),                        # Strong augmentations
         transforms.ToTensor(),
         transforms.Normalize(mean.tolist(), std.tolist()),         # Dynamic normalization
-        RandomErasing(p=0.25, scale=(0.02, 0.2), ratio=(0.3, 3.3))  # Simulate occlusion
+        transforms.RandomErasing(p=0.25)
     ])
 
-
-
     transform_val = transforms.Compose([
-        #transforms.Resize(224),  # <--- Add this
+        transforms.Resize(224),  # <--- Add this
         transforms.ToTensor(),
         transforms.Normalize(mean.tolist(), std.tolist()),
     ])
 
     transform_test = transforms.Compose([
-        #transforms.Resize(224),  # <--- Add this
+        transforms.Resize(224),  # <--- Add this
         transforms.ToTensor(),
         transforms.Normalize(mean.tolist(), std.tolist()),
     ])
@@ -209,7 +192,6 @@ def main():
     ############################################################################
     #       Data Loading
     ############################################################################
-
     trainset = torchvision.datasets.CIFAR100(root='./data', train=True,
                                             download=True, transform=transform_train)
 
@@ -235,7 +217,6 @@ def main():
     ############################################################################
     model = get_model(CONFIG)
     model = model.to(CONFIG["device"])   # move it to target device
-
     print("\nModel summary:")
     print(f"{model}\n")
     
@@ -255,12 +236,9 @@ def main():
     # Loss Function, Optimizer and optional learning rate scheduler
     ############################################################################
     from torch.optim.lr_scheduler import OneCycleLR
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.8, weight_decay=5e-4)
-    scheduler = OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(trainloader), epochs=CONFIG["epochs"]) #lets try using warmup scheduling
-
-
-
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.05) # Define the loss function with label smoothing to prevent overconfidence in predictions
+    optimizer = optim.AdamW(model.parameters(), lr=CONFIG["learning_rate"], weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
     # Initialize wandb
     wandb.init(project="-sp25-ds542-challenge", config=CONFIG)
     wandb.watch(model)  # watch the model gradients
